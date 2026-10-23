@@ -14,7 +14,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.text.InputType;
 import android.view.Gravity;
@@ -72,6 +74,7 @@ public final class MainActivity extends Activity {
     private SongStore store;
     private File musicDir;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final LinkedHashSet<String> selected = new LinkedHashSet<>();
     private ArrayList<Song> songs = new ArrayList<>();
     private ArrayList<String> pendingExportIds = new ArrayList<>();
@@ -107,6 +110,17 @@ public final class MainActivity extends Activity {
         renderPlayer();
     };
 
+    private final Runnable playerTicker = new Runnable() {
+        @Override public void run() {
+            if (playback != null) {
+                positionMs = playback.positionMs();
+                durationMs = playback.durationMs();
+                renderPlayer();
+            }
+            mainHandler.postDelayed(this, 500);
+        }
+    };
+
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder service) {
             playback = ((PlaybackService.LocalBinder) service).getService();
@@ -135,10 +149,22 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        mainHandler.removeCallbacks(playerTicker);
         if (playback != null) playback.setListener(null);
         if (bound) unbindService(serviceConnection);
         io.shutdown();
         super.onDestroy();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        mainHandler.removeCallbacks(playerTicker);
+        mainHandler.post(playerTicker);
+    }
+
+    @Override protected void onPause() {
+        mainHandler.removeCallbacks(playerTicker);
+        super.onPause();
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {

@@ -315,7 +315,7 @@ public final class PlaybackService extends Service {
         }
         long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO;
-        long state = playing ? PlaybackState.STATE_PLAYING : (preparing ? PlaybackState.STATE_BUFFERING : PlaybackState.STATE_PAUSED);
+        int state = playing ? PlaybackState.STATE_PLAYING : (preparing ? PlaybackState.STATE_BUFFERING : PlaybackState.STATE_PAUSED);
         mediaSession.setPlaybackState(new PlaybackState.Builder()
                 .setActions(actions)
                 .setState(state, safePosition(), playing ? 1.0f : 0.0f)

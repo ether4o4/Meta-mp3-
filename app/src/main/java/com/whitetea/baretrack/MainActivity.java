@@ -551,7 +551,10 @@ public final class MainActivity extends Activity {
     private void showTrackMenu(View anchor, Song song) {
         PopupMenu menu = new PopupMenu(this, anchor);
         menu.getMenu().add("Edit tags").setOnMenuItemClickListener(item -> { showEditor(song); return true; });
-        menu.getMenu().add("Remove clean copy").setOnMenuItemClickListener(item -> confirmRemove(song));
+        menu.getMenu().add("Remove clean copy").setOnMenuItemClickListener(item -> {
+            confirmRemove(song);
+            return true;
+        });
         menu.show();
     }
 

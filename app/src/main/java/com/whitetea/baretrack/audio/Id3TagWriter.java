@@ -34,7 +34,7 @@ public final class Id3TagWriter {
         }
     }
 
-    private static byte[] buildTag(SongTags tags) throws IOException {
+    public static byte[] buildTag(SongTags tags) throws IOException {
         java.io.ByteArrayOutputStream frames = new java.io.ByteArrayOutputStream();
         textFrame(frames, "TIT2", tags.get("Title"));
         textFrame(frames, "TPE1", tags.get("Artist"));

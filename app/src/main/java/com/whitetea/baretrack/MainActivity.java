@@ -38,6 +38,8 @@ import android.widget.Toast;
 
 import com.whitetea.baretrack.audio.Id3TagWriter;
 import com.whitetea.baretrack.audio.Mp3Sanitizer;
+import com.whitetea.baretrack.audio.WavSanitizer;
+import com.whitetea.baretrack.audio.WavTagWriter;
 import com.whitetea.baretrack.data.SongStore;
 import com.whitetea.baretrack.model.Song;
 import com.whitetea.baretrack.model.SongTags;
@@ -84,7 +86,7 @@ public final class MainActivity extends Activity {
     private boolean bound;
     private boolean batchMode;
     private boolean trackingSeek;
-    private String status = "Choose the MP3 files you want to clean.";
+    private String status = "Choose the MP3 or WAV files you want to clean.";
     private LinearLayout root;
     private LinearLayout libraryBox;
     private LinearLayout batchBox;
@@ -218,7 +220,7 @@ public final class MainActivity extends Activity {
         content.addView(importCard, params(-1, -2));
         TextView importTitle = label("Private import", 18, INK, true);
         importCard.addView(importTitle);
-        TextView importCopy = label("Nothing is scanned from your phone. Pick MP3s, and BareTrack strips their embedded tags as they come in.", 14, MUTED, false);
+        TextView importCopy = label("Nothing is scanned from your phone. Pick MP3s or WAVs, and BareTrack strips their embedded metadata as they come in.", 14, MUTED, false);
         LinearLayout.LayoutParams copyParams = params(-1, -2);
         copyParams.topMargin = dp(7);
         importCard.addView(importCopy, copyParams);
@@ -227,7 +229,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams buttonRow = params(-1, -2);
         buttonRow.topMargin = dp(14);
         importCard.addView(buttons, buttonRow);
-        Button importButton = actionButton("Import MP3s", true, v -> launchImport());
+        Button importButton = actionButton("Import audio", true, v -> launchImport());
         buttons.addView(importButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         Button batchButton = actionButton(batchMode ? "Done" : "Batch tools", false,
                 v -> { batchMode = !batchMode; selected.clear(); buildScreen(); });
@@ -284,7 +286,7 @@ public final class MainActivity extends Activity {
         privacyParams.topMargin = dp(16);
         content.addView(privacy, privacyParams);
         privacy.addView(label("What the deep strip removes", 14, INK, true));
-        TextView privacyText = label("ID3 tags (including hidden/private frames and cover art), APE, Lyrics3, encoder index frames, and bytes outside valid MP3 audio frames. The audio frames are retained. The original stays in Files until you export and confirm deletion.", 12, MUTED, false);
+        TextView privacyText = label("For MP3: ID3 tags (including hidden/private frames and cover art), APE, Lyrics3, encoder index frames, and bytes outside valid audio frames. For PCM/IEEE-float WAV: every non-audio chunk is removed, including INFO, broadcast metadata, XML, and embedded ID3. Audio samples are retained. Compressed WAV codecs and RF64 are not supported. The original stays in Files until you export and confirm deletion.", 12, MUTED, false);
         LinearLayout.LayoutParams privacyTextParams = params(-1, -2);
         privacyTextParams.topMargin = dp(6);
         privacy.addView(privacyText, privacyTextParams);
@@ -475,7 +477,9 @@ public final class MainActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("audio/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] { "audio/mpeg", "audio/mp3", "audio/x-mp3" });
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
+                "audio/mpeg", "audio/mp3", "audio/x-mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"
+        });
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
                 Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -499,7 +503,7 @@ public final class MainActivity extends Activity {
                 String id = UUID.randomUUID().toString().replace("-", "");
                 File input = new File(musicDir, "in_" + id + ".tmp");
                 File raw = new File(musicDir, "raw_" + id + ".tmp");
-                File output = new File(musicDir, id + ".mp3");
+                File output = null;
                 try {
                     try (InputStream in = getContentResolver().openInputStream(uri);
                          OutputStream out = new BufferedOutputStream(new FileOutputStream(input))) {
@@ -508,15 +512,23 @@ public final class MainActivity extends Activity {
                         int count;
                         while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
                     }
-                    Mp3Sanitizer.strip(input, raw);
+                    String extension;
+                    if (WavSanitizer.isWave(input)) {
+                        extension = "wav";
+                        WavSanitizer.strip(input, raw);
+                    } else {
+                        extension = "mp3";
+                        Mp3Sanitizer.strip(input, raw);
+                    }
+                    output = new File(musicDir, id + "." + extension);
                     if (!raw.renameTo(output)) copyFile(raw, output);
-                    if (!output.isFile() || output.length() == 0) throw new java.io.IOException("Clean MP3 output was not created.");
+                    if (!output.isFile() || output.length() == 0) throw new java.io.IOException("Clean audio output was not created.");
                     String source = persistSource(uri, dataFlagsForUri(data, uri));
-                    store.add(new Song(id, SongTags.blank(), source));
+                    store.add(new Song(id, SongTags.blank(), source, extension));
                     importedIds.add(id);
                 } catch (Exception e) {
                     failures.add(e.getMessage() == null ? "Could not import a selected file." : e.getMessage());
-                    output.delete();
+                    if (output != null) output.delete();
                 } finally {
                     input.delete();
                     raw.delete();
@@ -527,7 +539,7 @@ public final class MainActivity extends Activity {
                 selected.clear();
                 selected.addAll(importedIds);
                 batchMode = !importedIds.isEmpty();
-                String result = importedIds.size() + (importedIds.size() == 1 ? " MP3 imported and stripped." : " MP3s imported and stripped.");
+                String result = importedIds.size() + (importedIds.size() == 1 ? " audio file imported and stripped." : " audio files imported and stripped.");
                 if (!failures.isEmpty()) result += " " + failures.size() + " file(s) skipped: " + failures.get(0);
                 status = result;
                 buildScreen();
@@ -583,7 +595,7 @@ public final class MainActivity extends Activity {
         shell.setPadding(dp(18), dp(16), dp(18), dp(14));
         TextView title = label("Set the tags", 20, INK, true);
         shell.addView(title);
-        TextView description = label("Only these values will be written into the clean MP3.", 13, MUTED, false);
+        TextView description = label("Only these values will be written into the clean " + (song.isWave() ? "WAV." : "MP3."), 13, MUTED, false);
         LinearLayout.LayoutParams descParams = params(-1, -2);
         descParams.topMargin = dp(4);
         shell.addView(description, descParams);
@@ -669,7 +681,7 @@ public final class MainActivity extends Activity {
                     if (!value.isEmpty()) next.set(field, value);
                 }
                 parseCustom(custom.getText().toString(), next, false);
-                changed.add(new Song(song.id(), next, song.sourceUri()));
+                changed.add(new Song(song.id(), next, song.sourceUri(), song.extension()));
             }
             dialog.dismiss();
             writeBatchTags(changed);
@@ -727,6 +739,16 @@ public final class MainActivity extends Activity {
         return copy;
     }
 
+    private void sanitizeAndTag(Song song, File source, File raw, File target, SongTags tags) throws java.io.IOException {
+        if (song.isWave()) {
+            WavSanitizer.strip(source, raw);
+            WavTagWriter.write(raw, target, tags);
+        } else {
+            Mp3Sanitizer.strip(source, raw);
+            Id3TagWriter.write(raw, target, tags);
+        }
+    }
+
     private void writeTags(Song song, SongTags tags) {
         setStatus("Working: saving tags…");
         io.execute(() -> {
@@ -734,11 +756,10 @@ public final class MainActivity extends Activity {
                 File source = new File(musicDir, song.fileName());
                 File raw = new File(musicDir, "retag_raw_" + song.id() + ".tmp");
                 File target = new File(musicDir, "retag_" + song.id() + ".tmp");
-                Mp3Sanitizer.strip(source, raw);
-                Id3TagWriter.write(raw, target, tags);
+                sanitizeAndTag(song, source, raw, target, tags);
                 replaceFile(target, source);
                 raw.delete();
-                Song changed = new Song(song.id(), tags, song.sourceUri());
+                Song changed = new Song(song.id(), tags, song.sourceUri(), song.extension());
                 store.update(changed);
                 runOnUiThread(() -> { refreshSongs(); status = "Tags saved. The source file has not been changed."; buildScreen(); });
             } catch (Exception e) {
@@ -758,8 +779,7 @@ public final class MainActivity extends Activity {
                 File raw = new File(musicDir, "batch_raw_" + changed.id() + ".tmp");
                 File target = new File(musicDir, "batch_" + changed.id() + ".tmp");
                 try {
-                    Mp3Sanitizer.strip(source, raw);
-                    Id3TagWriter.write(raw, target, changed.tags());
+                    sanitizeAndTag(changed, source, raw, target, changed.tags());
                     replaceFile(target, source);
                     store.update(changed);
                     saved++;
@@ -794,7 +814,7 @@ public final class MainActivity extends Activity {
         for (String id : pendingExportIds) {
             for (Song song : songs) if (song.id().equals(id)) { targets.add(song); break; }
         }
-        setStatus("Working: exporting " + targets.size() + " clean MP3s…");
+        setStatus("Working: exporting " + targets.size() + " clean audio files…");
         io.execute(() -> {
             ArrayList<String> successful = new ArrayList<>();
             ArrayList<String> failed = new ArrayList<>();
@@ -807,11 +827,11 @@ public final class MainActivity extends Activity {
                     try {
                         File source = new File(musicDir, song.fileName());
                         String name = exportName(song, order++, names);
-                        Uri destination = DocumentsContract.createDocument(getContentResolver(), directory, "audio/mpeg", name);
-                        if (destination == null) throw new java.io.IOException("The selected folder would not create an MP3 file.");
+                        Uri destination = DocumentsContract.createDocument(getContentResolver(), directory, song.mimeType(), name);
+                        if (destination == null) throw new java.io.IOException("The selected folder would not create an audio file.");
                         try (InputStream in = new BufferedInputStream(new FileInputStream(source));
                              OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
-                            if (out == null) throw new java.io.IOException("Could not write the MP3 into the selected folder.");
+                            if (out == null) throw new java.io.IOException("Could not write the audio file into the selected folder.");
                             byte[] buffer = new byte[64 * 1024];
                             int count;
                             while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
@@ -836,13 +856,14 @@ public final class MainActivity extends Activity {
         if (title.isEmpty()) title = String.format(Locale.US, "Untitled track %02d", order);
         String base = title;
         int suffix = 2;
-        while (!names.add((title + ".mp3").toLowerCase(Locale.ROOT))) title = base + " (" + suffix++ + ")";
-        return title + ".mp3";
+        String extension = song.extension();
+        while (!names.add((title + "." + extension).toLowerCase(Locale.ROOT))) title = base + " (" + suffix++ + ")";
+        return title + "." + extension;
     }
 
     private void afterExport(ArrayList<String> successful, ArrayList<String> failed) {
         refreshSongs();
-        status = successful.size() + (successful.size() == 1 ? " clean MP3 exported." : " clean MP3s exported.");
+        status = successful.size() + (successful.size() == 1 ? " clean audio file exported." : " clean audio files exported.");
         if (!failed.isEmpty()) status += " " + failed.size() + " could not export.";
         buildScreen();
         if (successful.isEmpty()) {
@@ -884,7 +905,7 @@ public final class MainActivity extends Activity {
                 if (success) {
                     deleted++;
                     releaseSourcePermission(source);
-                    for (Song song : all) if (song.sourceUri().equals(source)) store.update(new Song(song.id(), song.tags(), ""));
+                    for (Song song : all) if (song.sourceUri().equals(source)) store.update(new Song(song.id(), song.tags(), "", song.extension()));
                 } else failed++;
             }
             int removed = deleted;
@@ -950,7 +971,7 @@ public final class MainActivity extends Activity {
     private void replaceFile(File replacement, File original) throws java.io.IOException {
         File backup = new File(original.getParentFile(), original.getName() + ".bak");
         if (backup.exists()) backup.delete();
-        if (!original.renameTo(backup)) throw new java.io.IOException("Could not safely replace the clean MP3.");
+        if (!original.renameTo(backup)) throw new java.io.IOException("Could not safely replace the clean audio file.");
         if (!replacement.renameTo(original)) {
             backup.renameTo(original);
             throw new java.io.IOException("Could not safely install the new tags.");

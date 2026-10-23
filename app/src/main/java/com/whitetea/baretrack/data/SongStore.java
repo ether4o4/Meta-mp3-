@@ -47,7 +47,7 @@ public final class SongStore {
                         tags.setCustom(key, custom.optString(key, ""));
                     }
                 }
-                songs.add(new Song(id, tags, item.optString("source", "")));
+                songs.add(new Song(id, tags, item.optString("source", ""), item.optString("ext", "mp3")));
             }
         } catch (Exception ignored) { }
         return songs;
@@ -85,6 +85,7 @@ public final class SongStore {
             try {
                 item.put("id", song.id());
                 item.put("source", song.sourceUri());
+                item.put("ext", song.extension());
                 for (String key : song.tags().values().keySet()) values.put(key, song.tags().get(key));
                 for (String key : song.tags().custom().keySet()) custom.put(key, song.tags().custom().get(key));
                 item.put("values", values);

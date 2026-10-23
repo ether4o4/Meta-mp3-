@@ -1,0 +1,1 @@
+BareTrack Android project. Full source and build workflow follow in the next commit.

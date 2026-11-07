@@ -65,17 +65,17 @@ public final class ForensicAnalyzer {
 
         public String toText() {
             StringBuilder out = new StringBuilder();
-            out.append("READ-ONLY AUDIO FORENSIC REPORT\\n");
-            out.append("File: ").append(fileName).append('\\n');
-            out.append("Size: ").append(fileSize).append(" bytes\\n");
-            out.append("SHA-256: ").append(sha256).append('\\n');
-            out.append("Container: ").append(detectedContainer).append('\\n');
-            out.append("String/signature leads: ").append(findings.size()).append('\\n');
+            out.append("READ-ONLY AUDIO FORENSIC REPORT\n");
+            out.append("File: ").append(fileName).append('\n');
+            out.append("Size: ").append(fileSize).append(" bytes\n");
+            out.append("SHA-256: ").append(sha256).append('\n');
+            out.append("Container: ").append(detectedContainer).append('\n');
+            out.append("String/signature leads: ").append(findings.size()).append('\n');
             for (Finding finding : findings) {
                 out.append("- ").append(finding.code)
                         .append(" | offset ").append(finding.firstOffset)
                         .append(" | occurrences ").append(finding.occurrences)
-                        .append(" | ").append(finding.description).append('\\n');
+                        .append(" | ").append(finding.description).append('\n');
             }
             out.append("Caution: marker matches are leads, not verified attribution. No audio was changed.");
             return out.toString();

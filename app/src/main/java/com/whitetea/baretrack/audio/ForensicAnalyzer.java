@@ -161,7 +161,10 @@ public final class ForensicAnalyzer {
                 if (equal) {
                     long offset = baseOffset + i;
                     if (matches[m].first < 0 || offset < matches[m].first) matches[m].first = offset;
-                    if (offset > matches[m].lastCountedOffset) {\n                        matches[m].count++;\n                        matches[m].lastCountedOffset = offset;\n                    }
+                    if (offset > matches[m].lastCountedOffset) {
+                        matches[m].count++;
+                        matches[m].lastCountedOffset = offset;
+                    }
                 }
             }
         }

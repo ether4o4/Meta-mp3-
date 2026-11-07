@@ -13,7 +13,10 @@ public final class SongTags {
     private final LinkedHashMap<String, String> values = new LinkedHashMap<>();
     private final LinkedHashMap<String, String> custom = new LinkedHashMap<>();
 
-    public String get(String key) { return values.getOrDefault(key, ""); }
+    public String get(String key) {
+        String value = values.get(key);
+        return value == null ? "" : value;
+    }
     public void set(String key, String value) {
         if (key == null || value == null) return;
         values.put(key, value.trim());

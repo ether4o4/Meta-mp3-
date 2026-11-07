@@ -97,6 +97,7 @@ public final class ForensicAnalyzer {
     private static final class Match {
         long first = -1;
         int count;
+        long lastCountedOffset = -1;
     }
 
     private ForensicAnalyzer() {}
@@ -160,7 +161,7 @@ public final class ForensicAnalyzer {
                 if (equal) {
                     long offset = baseOffset + i;
                     if (matches[m].first < 0 || offset < matches[m].first) matches[m].first = offset;
-                    matches[m].count++;
+                    if (offset > matches[m].lastCountedOffset) {\n                        matches[m].count++;\n                        matches[m].lastCountedOffset = offset;\n                    }
                 }
             }
         }

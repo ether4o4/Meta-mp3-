@@ -74,6 +74,7 @@ public final class MainActivity extends Activity {
     private static final int LINE = 0xFFE2E4DE;
 
     private SongStore store;
+    private ForensicLab lab;
     private File musicDir;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -145,6 +146,18 @@ public final class MainActivity extends Activity {
         store = new SongStore(this);
         musicDir = new File(getFilesDir(), "music");
         musicDir.mkdirs();
+        lab = new ForensicLab(this, new ForensicLab.Host() {
+            @Override public void setStatus(String value) {
+                if (value.startsWith("Working") && status.startsWith("Working") && statusLabel != null) {
+                    status = value;
+                    statusLabel.setText(value);
+                } else {
+                    MainActivity.this.setStatus(value);
+                }
+            }
+
+            @Override public ExecutorService io() { return io; }
+        });
         bound = bindService(new Intent(this, PlaybackService.class), serviceConnection, Context.BIND_AUTO_CREATE);
         refreshSongs();
         buildScreen();
@@ -171,6 +184,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (lab.onActivityResult(requestCode, resultCode, data)) return;
         if (resultCode != RESULT_OK || data == null) return;
         if (requestCode == REQUEST_IMPORT) handleImportResult(data);
         else if (requestCode == REQUEST_EXPORT_FOLDER) handleExportFolder(data);
@@ -253,6 +267,10 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams statusTextParams = new LinearLayout.LayoutParams(0, -2, 1);
         statusTextParams.leftMargin = dp(10);
         statusCard.addView(statusLabel, statusTextParams);
+
+        LinearLayout.LayoutParams labParams = params(-1, -2);
+        labParams.topMargin = dp(12);
+        content.addView(lab.buildCard(), labParams);
 
         LinearLayout heading = new LinearLayout(this);
         heading.setOrientation(LinearLayout.HORIZONTAL);
@@ -563,6 +581,21 @@ public final class MainActivity extends Activity {
     private void showTrackMenu(View anchor, Song song) {
         PopupMenu menu = new PopupMenu(this, anchor);
         menu.getMenu().add("Edit tags").setOnMenuItemClickListener(item -> { showEditor(song); return true; });
+        menu.getMenu().add("Inspect original").setOnMenuItemClickListener(item -> {
+            String source = song.sourceUri();
+            if (source == null || source.isEmpty()) {
+                toast("The original's location was not kept, so it cannot be inspected.");
+            } else {
+                ArrayList<Uri> uris = new ArrayList<>();
+                uris.add(Uri.parse(source));
+                lab.examine(uris);
+            }
+            return true;
+        });
+        menu.getMenu().add("Inspect clean copy").setOnMenuItemClickListener(item -> {
+            lab.examineLocal(new File(musicDir, song.fileName()), song.displayTitle(songs.indexOf(song) + 1) + " (clean copy)");
+            return true;
+        });
         menu.getMenu().add("Remove clean copy").setOnMenuItemClickListener(item -> {
             confirmRemove(song);
             return true;
